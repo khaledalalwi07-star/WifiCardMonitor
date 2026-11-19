@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#123b63">
+<title>مراقب كروت الإنترنت</title>
+<style>
+:root{font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif;color:#152536;background:#f2f6fa}
+*{box-sizing:border-box}body{margin:0;padding:18px}.app{max-width:520px;margin:auto}
+header{background:#123b63;color:white;padding:22px;border-radius:18px;margin-bottom:16px}
+h1{font-size:23px;margin:0 0 7px}header p{margin:0;opacity:.9;font-size:14px}
+.card{background:white;border-radius:16px;padding:17px;margin:12px 0;box-shadow:0 3px 14px #123b6310}
+label{display:block;font-weight:650;margin:12px 0 6px}
+input,select{width:100%;padding:13px;border:1px solid #ccd7e2;border-radius:10px;font-size:16px;background:#fff}
+button{border:0;border-radius:11px;padding:13px 16px;font-size:16px;font-weight:700;cursor:pointer}
+.primary{background:#1769aa;color:white;width:100%;margin-top:16px}
+.secondary{background:#e8f1f8;color:#123b63}
+.danger{background:#fff0f0;color:#a32929}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.metric{background:#f3f7fb;padding:13px;border-radius:12px}
+.metric small{display:block;color:#607387;margin-bottom:5px}
+.metric strong{font-size:19px;overflow-wrap:anywhere}
+.muted{color:#607387;font-size:13px;line-height:1.6}
+.row{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+#status{font-weight:700;color:#1769aa}
+hr{border:0;border-top:1px solid #e5edf3;margin:16px 0}
+</style>
+</head>
+<body>
+<div class="app">
+<header><h1>مراقب كروت الإنترنت</h1><p>سجّل كرتك وتابع الوقت المتبقي وحجم البيانات.</p></header>
+<section class="card">
+<h2 style="margin-top:0">إضافة كرت جديد</h2>
+<label for="name">اسم الكرت (اختياري)</label><input id="name" placeholder="مثلاً: كرت الأسبوع">
+<div class="grid">
+<div><label for="quota">حجم الباقة</label><input id="quota" type="number" min="0.01" step="0.01" placeholder="مثلاً 500"></div>
+<div><label for="unit">وحدة الحجم</label><select id="unit"><option value="MB">ميجابايت (MB)</option><option value="GB">جيجابايت (GB)</option></select></div>
+</div>
+<label for="duration">مدة الصلاحية (ساعات)</label><input id="duration" type="number" min="0.01" step="0.01" placeholder="24">
+<button class="primary" id="add">بدء الكرت</button>
+<p class="muted">يبدأ حساب مدة الصلاحية عند الضغط على «بدء الكرت».</p>
+</section>
+<section class="card" id="activeCard" hidden>
+<div class="row"><h2 style="margin:0">الكرت الحالي</h2><span id="status">نشط</span></div>
+<p id="cardName" class="muted"></p>
+<div class="grid">
+<div class="metric"><small>حجم الباقة</small><strong id="total">—</strong></div>
+<div class="metric"><small>الوقت المتبقي</small><strong id="remainingTime">—</strong></div>
+<div class="metric"><small>المستهلك</small><strong id="used">0 MB</strong></div>
+<div class="metric"><small>المتبقي من الباقة</small><strong id="left">—</strong></div>
+</div>
+<hr>
+<label for="usedInput">الاستهلاك الحالي حسب قراءة هاتفك (<span id="unitLabel">MB</span>)</label>
+<input id="usedInput" type="number" min="0" step="0.01" placeholder="أدخل الاستهلاك الظاهر في إعدادات الهاتف">
+<button class="secondary" id="saveUsage" style="width:100%;margin-top:10px">تحديث الاستهلاك</button>
+<p class="muted">ملاحظة: هذه النسخة تحسب الوقت تلقائيًا، أما استهلاك Wi‑Fi فيُدخل من قراءة الهاتف. لا تستطيع صفحة ويب قراءة عدّاد Wi‑Fi الخاص بأندرويد تلقائيًا.</p>
+<button class="danger" id="end" style="width:100%;margin-top:8px">إنهاء الكرت</button>
+</section>
+<section class="card">
+<div class="row"><h3 style="margin:0">سجل الكروت</h3><button class="secondary" id="clearHistory">مسح السجل</button></div>
+<div id="history" class="muted" style="margin-top:10px">لا توجد كروت محفوظة بعد.</div>
+</section>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+let active=JSON.parse(localStorage.getItem('wifiCardActive')||'null');
+let history=JSON.parse(localStorage.getItem('wifiCardHistory')||'[]');
+function save(){localStorage.setItem('wifiCardActive',JSON.stringify(active));localStorage.setItem('wifiCardHistory',JSON.stringify(history));}
+function displayAmount(mb,unit){return unit==='GB'?(mb/1024).toFixed(2)+' GB':mb.toFixed(2)+' MB';}
+function fmt(ms){if(ms<=0)return 'انتهت الصلاحية';let s=Math.floor(ms/1000),d=Math.floor(s/86400);s%=86400;let h=Math.floor(s/3600);s%=3600;let m=Math.floor(s/60);return (d?d+' يوم ':'')+(h+' ساعة '+m+' دقيقة');}
+function render(){
+ $('activeCard').hidden=!active;
+ if(active){
+  let remain=active.start+active.duration*3600000-Date.now(),left=Math.max(0,active.quotaMB-active.usedMB),unit=active.unit;
+  $('cardName').textContent=active.name||'كرت بدون اسم';
+  $('total').textContent=displayAmount(active.quotaMB,unit);
+  $('remainingTime').textContent=fmt(remain);
+  $('used').textContent=displayAmount(active.usedMB,unit);
+  $('left').textContent=displayAmount(left,unit);
+  $('status').textContent=remain>0&&left>0?'نشط':'انتهى';
+  $('status').style.color=remain>0&&left>0?'#1769aa':'#b12b2b';
+  $('unitLabel').textContent=unit;
+  $('usedInput').value=active.unit==='GB'?(active.usedMB/1024).toFixed(2):active.usedMB.toFixed(2);
+ }
+ $('history').innerHTML=history.length?history.slice().reverse().map(x=>`<div style="padding:9px 0;border-bottom:1px solid #e5edf3"><b>${escapeHtml(x.name||'كرت')}</b><br>الباقة: ${displayAmount(x.quotaMB,x.unit)} — المستهلك: ${displayAmount(x.usedMB,x.unit)}<br><small>${new Date(x.start).toLocaleString('ar')}</small></div>`).join(''):'لا توجد كروت محفوظة بعد.';
+}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+$('add').onclick=()=>{
+ let q=Number($('quota').value),d=Number($('duration').value),unit=$('unit').value;
+ if(!(q>0&&d>0)){alert('أدخل حجم الباقة ومدة الصلاحية بشكل صحيح.');return;}
+ if(active&&!confirm('سيتم نقل الكرت الحالي إلى السجل وبدء كرت جديد. متابعة؟'))return;
+ if(active)history.push({...active,end:Date.now()});
+ active={name:$('name').value.trim(),quotaMB:unit==='GB'?q*1024:q,unit,duration:d,start:Date.now(),usedMB:0};
+ save();render();
+};
+$('saveUsage').onclick=()=>{
+ if(!active)return;let v=Number($('usedInput').value);
+ if(!Number.isFinite(v)||v<0){alert('أدخل رقمًا صحيحًا.');return;}
+ active.usedMB=Math.min(active.unit==='GB'?v*1024:v,active.quotaMB);save();render();
+};
+$('end').onclick=()=>{if(!active)return;if(confirm('هل تريد إنهاء هذا الكرت وحفظه في السجل؟')){history.push({...active,end:Date.now()});active=null;save();render();}};
+$('clearHistory').onclick=()=>{if(confirm('مسح سجل الكروت؟')){history=[];save();render();}};
+setInterval(render,30000);render();
+</script>
+</body></html>
